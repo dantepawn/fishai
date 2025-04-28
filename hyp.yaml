@@ -1,0 +1,11 @@
+# Custom augmentation parameters
+degrees: 20.0       # +/- rotation (was 0.0)
+fliplr: 0.5         # horizontal flip probability
+flipud: 0.0         # vertical flip probability (keep default)
+perspective: 0.0    # perspective (keep disabled)
+scale: 0.2
+# new params
+mosaic: 0.0
+pose: 24.0
+crop_fraction: 0.8 # 
+# kobj: 8.0  # Increase keypoint loss weight

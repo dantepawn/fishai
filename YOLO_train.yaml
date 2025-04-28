@@ -1,0 +1,13 @@
+# Train/val/test sets as 1) dir: path/to/imgs, 2) file: path/to/imgs.txt, or 3) list: [path/to/imgs1, path/to/imgs2, ..]
+path: /content/drive/MyDrive/2023_24 Prototype 2.0/PESCI/Keypoints/ # dataset root dir (absolute or relative; if relative, it's relative to default datasets_dir)
+train: YOLO/train # train images (relative to 'path') 70 images
+val: YOLO/val # val images (relative to 'path') 7 images
+test: # test images (optional)
+
+# Keypoints
+kpt_shape: [4, 2] 
+flip_idx : [0, 1, 2, 3]
+
+# Classes dictionary
+names:
+    0: fish
