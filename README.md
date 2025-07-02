@@ -33,8 +33,3 @@
 - **Python 3.x**  
 - Recommended: OpenCV, NumPy, and other standard scientific libraries (install as needed for your workflow)
 
----
-
-## Getting Started
-
-1. **Clone the repository:**
