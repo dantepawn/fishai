@@ -59,3 +59,28 @@ def create_yolo_labels(boxes, keypoints, target_folder="new_labels/"):
                         line += f"{row['x']/original_width} {row['y']/original_height} "
                 line += "\n"
             f.write(line)
+
+def remove_fins_morphological(mask, kernel_size=5, iterations=3):
+
+    if mask.ndim > 2:
+        mask = mask.squeeze(0)
+    mask = (mask * 255).astype(np.uint8)
+
+    # Create elliptical structuring element (better for biological shapes)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
+
+    # Erode to disconnect fins from body
+    eroded = cv2.erode(mask, kernel, iterations=iterations)
+
+    # Dilate to restore body size while keeping fins removed
+    dilated = cv2.dilate(eroded, kernel, iterations=iterations)
+
+    # Find contours to isolate main body component
+    contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    # Keep only largest contour (main fish body)
+    largest_contour = max(contours, key=cv2.contourArea)
+    cleaned_mask = np.zeros_like(mask)
+    cv2.drawContours(cleaned_mask, [largest_contour], -1, 255, thickness=cv2.FILLED)
+
+    return cleaned_mask
