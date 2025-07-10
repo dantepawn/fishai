@@ -16,18 +16,34 @@ def split_image(source_image_path , target_folder_path):
     height, width = image.shape[:2]
     img_name = Path(source_image_path).name
 
-    # check if the target folder exists 
-    if not Path(target_folder_path).exists():
-        print(f"Target folder {target_folder_path} does not exist. Creating it.")
-    
-    # Split the image into 4 equal parts
-    subimage1 = image[:height//2,:width//2]
-    subimage2 = image[:height//2,width//2:]
-    subimage3 = image[height//2:,:width//2]
-    subimage4 = image[height//2:,width//2:]
 
-    for i, subimage in enumerate([subimage2, subimage1, subimage3, subimage4]):
-        cv2.imwrite(target_folder_path+str(img_name).replace(".jpg", "_l" + str(i) + ".jpg"), subimage)
+        # check if the target folder exists 
+    if not Path(target_folder_path).exists():
+        print(f"Target folder {target_folder_path} does not exist. Creating it.")    
+    if height > width :
+        # good
+        
+
+        
+        # Split the image into 4 equal parts
+        subimage1 = image[:height//2,:width//2]
+        subimage0 = image[:height//2,width//2:]
+        subimage2 = image[height//2:,:width//2]
+        subimage3 = image[height//2:,width//2:]
+
+        for i, subimage in enumerate([subimage0, subimage1 , subimage2, subimage3]):
+            cv2.imwrite(target_folder_path+str(img_name).replace(".jpg", "_l" + str(i) + ".jpg"), subimage)
+    else :
+        image = cv2.imread(source_image_path)
+        image = cv2.rotate(image , cv2.ROTATE_90_COUNTERCLOCKWISE)
+        # Split the image into 4 equal parts
+        subimage1 = image[:height//2,:width//2]
+        subimage0 = image[:height//2,width//2:]
+        subimage2 = image[height//2:,:width//2]
+        subimage3 = image[height//2:,width//2:]
+
+        for i, subimage in enumerate([subimage0, subimage1 , subimage2, subimage3]):
+            cv2.imwrite(target_folder_path+str(img_name).replace(".jpg", "_l" + str(i) + ".jpg"), subimage)
     
 
 
