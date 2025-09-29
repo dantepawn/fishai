@@ -1,3 +1,2 @@
-from . import keypoints
+# fishai/__init__.py
 
-__all__ = ["keypoints"]
