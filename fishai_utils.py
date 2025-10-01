@@ -1,30 +1,36 @@
 # Auto-generated from notebook; edit the notebook instead.
 
-from fishai.utilities import *
-from fishai.depth_utilities import *
-import torch
-from sam2.build_sam import build_sam2
-from sam2.sam2_image_predictor import SAM2ImagePredictor
-from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
-import supervision as sv
+#from fishai.utilities import *
+#from fishai.depth_utilities import *
+
 import os
 import random
 from PIL import Image
 import numpy as np
 import cv2
-from google.colab.patches import cv2_imshow
-import matplotlib.pyplot as plt
-from supervision.draw.color import Color
 import shutil
 from tqdm import tqdm
 from pathlib import Path
 import re
 import json
 import pandas as pd
-from google.colab import sheets
+#Visualization
+import matplotlib.pyplot as plt
 import seaborn as sns
+import supervision as sv
+from supervision.draw.color import Color
+# google colab utilities
+from google.colab.patches import cv2_imshow
+from google.colab import sheets
+# Keypoints detection
 from random import sample
 from ultralytics import YOLO
+
+# Segmentation
+import torch
+from sam2.build_sam import build_sam2
+from sam2.sam2_image_predictor import SAM2ImagePredictor
+from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 
 
 def remove_fins_morphological(mask, kernel_size=5, iterations=3):
@@ -48,7 +54,7 @@ def remove_fins_morphological(mask, kernel_size=5, iterations=3):
     # Keep only largest contour (main fish body)
     largest_contour = max(contours, key=cv2.contourArea)
     cleaned_mask = np.zeros_like(mask)
-    cv2.drawContours(cleaned_mask, [largest_contour], -1, 255, thickness=cv2.FILLED)
+    #cv2.drawContours(cleaned_mask, [largest_contour], -1, 255, thickness=cv2.FILLED)
 
     return cleaned_mask
 def generate_segmentation(predictor, img_list, labels_folder, save_folder,
@@ -242,6 +248,17 @@ def shift_matrix(matrix, delta, fill_value=-32):
         shifted = m.copy()
 
     return shifted
+def slide_masks(mask_logits , direction):
+    """ returns 15 possible candidate masks for detecting the fish mask"""
+    stride = np.linspace(10, 50, 15, dtype = int )
+    candidate_masks = []
+    if direction == False:
+        coeff = 1
+    else :
+        coeff = -1
+    for x in stride :
+        candidate_masks.append(shift_matrix(mask_logits , coeff*int(x) , fill_value=-32))
+    return candidate_masks
 def get_mask_centroid_difference(mask_upper, mask_lower):
     """
     Calculates the difference between the centroids of two binary masks.
@@ -283,6 +300,9 @@ def get_mask_centroid_difference(mask_upper, mask_lower):
 
     return (dx, dy)
 def produce_coupled_images(file_names):
+    """
+    Produces coupled images by swapping the labels in the file names.
+    """
     substitution_dict = {
         "l0": "l3",
         "l1": "l2",
@@ -300,20 +320,10 @@ def produce_coupled_images(file_names):
                 coupled_images.append((f, new_name, num1 < num2, abs(num1 - num2)))
                 break
     return coupled_images
-def slide_masks(mask_logits , direction):
-    """ returns 15 possible candidate masks for detecting the fish mask"""
-    stride = np.linspace(10, 50, 15, dtype = int )
-    candidate_masks = []
-    if direction == False:
-        coeff = 1
-    else :
-        coeff = -1
-    for x in stride :
-        candidate_masks.append(shift_matrix(mask_logits , coeff*int(x) , fill_value=-32))
-    return candidate_masks
+
 def plot_masks(source_image, target_image, source_mask, source_box,
                best_mask, best_box, best_score, distance, area,
-               index, show=True, save_dir="./test_distance", filename=None):
+               index, show=True, save_dir="./images_distance", filename=None):
     """
     Save a side-by-side visualization of source/target masks.
     If show=False, the figure won't be displayed, only saved.
@@ -426,7 +436,7 @@ def detect_similar_mask(
     ]
 
 
-    best_score = -np.inf
+    best_score = np.inf
     best_box, best_mask, best_logit = None, None, None
 
     for cb, cl in zip(candidate_boxes, candidate_logits):
@@ -436,23 +446,21 @@ def detect_similar_mask(
             mask_input=cl,
         )
         sorted_ind = np.argsort(scores)[::-1]
+        # sort from max to min score 
         masks, scores, logits = (
             masks[sorted_ind], scores[sorted_ind], logits[sorted_ind]
         )
 
         for cm, cs, cl_2 in zip(masks, scores, logits):
-            same, sim_score = are_masks_same_translation_invariant(
+            same_shape, sim_difference = are_masks_same_translation_invariant(
                 cm, source_mask, method="match", tol=sim_tol
             )
 
-            if not same:
+            if not same_shape:
                 continue
 
-            # Blend predictor score with similarity score
-            combined_score = sim_weight * cs + (1 - sim_weight) * sim_score
-
-            if combined_score > best_score:
-                best_score = combined_score
+            if sim_difference <= best_score:
+                best_score = sim_difference
                 best_box, best_mask, best_logit = cb, cm, cl_2
 
     # no valid candidate found → bail out
@@ -752,60 +760,118 @@ def compute_ratio(keypoints, calib_json):
     d_tb = dist(pts["top"], pts["bottom"])
 
     return d_ht / d_tb if d_tb != 0 else float("inf")
-def calculate_rectified_distance_and_area(left_mask, right_mask, baseline , focal_length , lenses):
 
-    height , width = 2312 , 1736
+def calculate_rectified_distance_and_area(
+    left_mask,
+    right_mask,
+    baseline,
+    focal_length,
+    lenses,
+    rectify: bool = True,              # True: use stereo rectification maps; False: skip remap
+    disparity: str = "mean",           # "centroid" | "shift" | "mean"
+    dx_agree_px: float = 50.0          # mismatch threshold when using "mean"
+):
+    """
+    Compute distance (m) and area (cm^2) from stereo masks with configurable options.
 
-    if left_mask.shape != (height , width):
-        left_mask = cv2.resize(left_mask , dsize = (width , height))
-    if right_mask.shape != (height , width):
-        right_mask = cv2.resize(right_mask , dsize = (width , height))
+    Args:
+      left_mask, right_mask: binary masks (any dtype/shape; will be resized/rotated)
+      baseline: meters
+      focal_length: pixels
+      lenses: "12" or "03"
+      rectify: if True, apply rectification maps; if False, only resize/rotate
+      disparity:
+        - "centroid": dx from centroid difference after (optional) rectification
+        - "shift":    dx from estimate_mask_shift (ECC/phasecorr) after (optional) rectification
+        - "mean":     mean of available dx estimates (flags mismatch if they differ > dx_agree_px)
+      dx_agree_px: mismatch threshold for "mean"
+
+    Returns:
+      distance_m, area_cm2, (dx_centroid, dx_est), (area_px_left, area_px_right)
+    """
+    H, W = 2312, 1736
+
+    # Ensure 2D binary masks
+    left = np.asarray(left_mask)
+    right = np.asarray(right_mask)
+    if left.ndim > 2:
+        left = left.squeeze()
+    if right.ndim > 2:
+        right = right.squeeze()
+    left = (left > 0).astype(np.uint8)
+    right = (right > 0).astype(np.uint8)
+
+    # Resize to expected sensor shape
+    if left.shape != (H, W):
+        left = cv2.resize(left, (W, H), interpolation=cv2.INTER_NEAREST)
+    if right.shape != (H, W):
+        right = cv2.resize(right, (W, H), interpolation=cv2.INTER_NEAREST)
+
+    # Rotate to match calibration orientation
+    left = cv2.rotate(left, cv2.ROTATE_90_COUNTERCLOCKWISE)
+    right = cv2.rotate(right, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
+    # Pick rectification maps
+    if lenses == "12":
+        lmxr, lmyr = left_map_x_rectify_12, left_map_y_rectify_12
+        rmxr, rmyr = right_map_x_rectify_12, right_map_y_rectify_12
+    elif lenses == "03":
+        lmxr, lmyr = left_map_x_rectify_03, left_map_y_rectify_03
+        rmxr, rmyr = right_map_x_rectify_03, right_map_y_rectify_03
+    else:
+        raise ValueError("Lenses must be '12' or '03'")
+
+    # Rectify (optional)
+    if rectify:
+        left_rect = cv2.remap(left, lmxr, lmyr, interpolation=cv2.INTER_NEAREST,
+                              borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+        right_rect = cv2.remap(right, rmxr, rmyr, interpolation=cv2.INTER_NEAREST,
+                               borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+    else:
+        left_rect, right_rect = left, right
+
+    # Guard empty masks
+    if left_rect.sum() == 0 or right_rect.sum() == 0:
+        return None, None, (None, None), (None, None)
+
+    # Disparity estimates
+    dx_centroid, _ = get_mask_centroid_difference(left_rect, right_rect)  # returns (dx, dy)
+    _, dx_est, _, _ = estimate_mask_shift(left_rect, right_rect)          # returns (dy, dx, score, method)
+
+    # Select disparity
+    dx = None
+    disp = disparity.lower()
+    if disp in ("centroid", "centroid_only"):
+        dx = dx_centroid
+    elif disp in ("shift", "est", "ecc", "phasecorr"):
+        dx = dx_est
+    elif disp in ("mean", "avg", "auto"):
+        vals = [v for v in (dx_centroid, dx_est) if v is not None and np.isfinite(v)]
+        if not vals:
+            dx = None
+        elif len(vals) == 1:
+            dx = float(vals[0])
+        else:
+            # Optionally flag mismatch; we still return mean
+            if abs(float(vals[0]) - float(vals[1])) > float(dx_agree_px):
+                pass  # caller can check difference in the returned tuple
+            dx = float(np.mean(vals))
+    else:
+        raise ValueError("disparity must be one of ['centroid','shift','mean']")
+
+    if dx is None or abs(dx) < 1e-6:
+        return None, None, (dx_centroid, dx_est), (int(left_rect.sum()), int(right_rect.sum()))
+
+    # Distance (baseline in meters, focal length in pixels)
+    distance_m = (baseline * float(focal_length)) / abs(dx)
+
+    # Area: mean of foreground pixels (rectified or not), converted to cm^2
+    area_px = float(left_rect.sum() + right_rect.sum()) / 2.0
+    area_cm2 = pixel_area_to_cm2(area_px, distance_m, float(focal_length))
+
+    return distance_m, area_cm2, (dx_centroid, dx_est), (int(left_rect.sum()), int(right_rect.sum()))
 
 
-    left_mask = cv2.rotate(left_mask , cv2.ROTATE_90_COUNTERCLOCKWISE)
-    right_mask = cv2.rotate(right_mask , cv2.ROTATE_90_COUNTERCLOCKWISE)
-
-    if lenses == "12" :
-        left_map_x_rectify = left_map_x_rectify_12
-        left_map_y_rectify = left_map_y_rectify_12
-        right_map_x_rectify = right_map_x_rectify_12
-        right_map_y_rectify = right_map_y_rectify_12
-    elif lenses == "03" :
-        left_map_x_rectify = left_map_x_rectify_03
-        left_map_y_rectify = left_map_y_rectify_03
-        right_map_x_rectify = right_map_x_rectify_03
-        right_map_y_rectify = right_map_y_rectify_03
-    else :
-        raise ValueError("Lenses must be 12 or 03")
-
-    temp_undistorted_left_mask = cv2.remap(
-        left_mask,
-        left_map_x_rectify,
-        left_map_y_rectify,
-        interpolation=cv2.INTER_NEAREST,  # nearest is best for binary masks
-        borderMode=cv2.BORDER_CONSTANT,
-        borderValue=0
-    )
-
-
-    temp_undistorted_right_mask = cv2.remap(
-        right_mask,
-        right_map_x_rectify,
-        right_map_y_rectify,
-        interpolation=cv2.INTER_NEAREST,
-        borderMode=cv2.BORDER_CONSTANT,
-        borderValue=0
-    )
-    horizontal_shift = np.mean((abs(get_mask_centroid_difference(temp_undistorted_left_mask, temp_undistorted_right_mask )[0]), abs(estimate_mask_shift(temp_undistorted_left_mask , temp_undistorted_right_mask)[1])))
-
-
-    distance = baseline * focal_length / abs(horizontal_shift)
-
-    mean_pixel_surface = np.mean((int(temp_undistorted_left_mask.sum()) , int(temp_undistorted_right_mask.sum())))
-
-    area = pixel_area_to_cm2(mean_pixel_surface, distance, focal_length )
-
-    return distance , area
 def stereo_measure_from_boxes(
     predictor,
     boxes_folder: str,
