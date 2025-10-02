@@ -106,8 +106,12 @@ def generate_segmentation(predictor, img_list, labels_folder, save_folder,
                         # select calibration
                         if img_path.stem[-1] == '0':
                             cr = calibration_results_03
-                        else:
+                        elif   img_path.stem[-1] == '3':  
+                            cr = calibration_results_03
+                        elif   img_path.stem[-1] == '1':
                             cr = calibration_results_12
+                        elif img_path.stem[-1] == '2':  
+                            cr = calibration_results_12 
 
                         ratio = compute_ratio(keypoints, cr)
                         ratios.append(ratio)
@@ -157,54 +161,56 @@ def generate_segmentation(predictor, img_list, labels_folder, save_folder,
             for i, box in enumerate(boxes):
                 masks, scores, logits = predictor.predict(
                     box=np.array(box)[None],
-                    multimask_output=False,
+                    multimask_output=True,
                 )
 
                 if masks is None or masks.shape[0] == 0:
                     print(f"No masks predicted for box {i} in {img_path.stem}")
                     continue
+                best_mask , best_score , best_logit = masks[np.argmax(scores)], scores[np.argmax(scores)], logits[np.argmax(scores)]
 
-                cleaned_mask = remove_fins_morphological(masks[0], kernel_size=10, iterations=1)
-                if not np.any(cleaned_mask):
-                    print(f"Empty mask after morphology for {img_path.stem} box {i}")
+                # refine mask for better segmentation
+                masks, scores, logits = predictor.predict(
+                    box=np.array(box)[None],
+                    multimask_output=True,
+                    mask_input = np.array([best_logit])
+                    )
+
+                best_mask , best_score , best_logit = masks[np.argmax(scores)], scores[np.argmax(scores)], logits[np.argmax(scores)]
+                if best_score < .70: # confidence threshold for accepting the mask
+                    print(f"Confidence score for fish {i} in {img_path.stem} too low: {best_score:.3f}")
                     continue
-
-                binary_mask = cleaned_mask.astype(bool)[np.newaxis, :, :]
-
-                scores_array = np.squeeze(scores) if scores is not None else None
-                if scores_array is not None and scores_array.ndim == 0:
-                    scores_array = np.array([scores_array])
-
                 detections = sv.Detections(
                     xyxy=np.array([box]),
-                    mask=binary_mask,
+                    mask=best_mask.astype(bool)[np.newaxis, :, :],
                     class_id=np.array([1]),
-                    confidence=scores_array
+                    confidence=np.array([best_score])
                 )
 
                 annotated_image = image.copy()
                 annotated_image = mask_annotator.annotate(scene=annotated_image, detections=detections)
                 annotated_image = box_annotator.annotate(scene=annotated_image, detections=detections)
 
-                output_seg_dir = save_folder
-                os.makedirs(output_seg_dir, exist_ok=True)
-                cv2.imwrite(f"{output_seg_dir}/{img_path.stem}_{i}.jpg",
+                output_mask_dir = os.path.join(save_folder, "annotations")
+                os.makedirs(output_mask_dir, exist_ok=True)
+                cv2.imwrite(f"{output_mask_dir}/{img_path.stem}_{i}.png",
                             cv2.cvtColor(annotated_image, cv2.COLOR_RGB2BGR))
 
                 # save mask/logits
-                output_mask_dir = os.path.join(output_seg_dir, "masks")
+                output_mask_dir = os.path.join(save_folder, "masks")
                 os.makedirs(output_mask_dir, exist_ok=True)
-                np.save(f"{output_mask_dir}/{img_path.stem}_{i}.npy", binary_mask)
+                np.save(f"{output_mask_dir}/{img_path.stem}_{i}.npy", best_mask)
 
-                output_logits_dir = os.path.join(output_seg_dir, "logits")
+                output_logits_dir = os.path.join(save_folder, "logits")
                 os.makedirs(output_logits_dir, exist_ok=True)
-                np.save(f"{output_logits_dir}/{img_path.stem}_{i}.npy", logits)
+                np.save(f"{output_logits_dir}/{img_path.stem}_{i}.npy", best_logit)
 
         except Exception as e:
             print(f"Error processing {img_path}: {e}")
 
     print(f"Processed {fish_counter} fish")
     return ratios
+
 def load_bounding_boxes(txt_file , image_height , image_width):
     boxes = []
     with open(txt_file, "r") as f:
