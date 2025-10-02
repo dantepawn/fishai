@@ -1,4 +1,3 @@
-# Auto-generated from notebook; edit the notebook instead.
 
 #from fishai.utilities import *
 #from fishai.depth_utilities import *
@@ -19,6 +18,17 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import supervision as sv
 from supervision.draw.color import Color
+
+box_annotator = sv.BoxAnnotator(
+    color=Color.GREEN,
+    thickness=8,
+)
+mask_annotator = sv.MaskAnnotator(
+    color=Color.RED,
+    opacity=0.5,
+    color_lookup=sv.ColorLookup.INDEX
+)
+
 # google colab utilities
 from google.colab.patches import cv2_imshow
 from google.colab import sheets
@@ -31,6 +41,7 @@ import torch
 from sam2.build_sam import build_sam2
 from sam2.sam2_image_predictor import SAM2ImagePredictor
 from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
+
 
 
 def remove_fins_morphological(mask, kernel_size=5, iterations=3):
