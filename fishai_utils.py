@@ -777,15 +777,15 @@ def compute_ratio(keypoints, calib_json):
     d_tb = dist(pts["top"], pts["bottom"])
 
     return d_ht / d_tb if d_tb != 0 else float("inf")
-
 def calculate_rectified_distance_and_area(
     left_mask,
     right_mask,
     baseline,
     focal_length,
     lenses,
-    rectify: bool = True,              # True: use stereo rectification maps; False: skip remap
-    disparity: str = "mean",           # "centroid" | "shift" | "mean"
+    rectify: bool = True,  # True: use stereo rectification maps; False: skip remap
+    rectify_map = rect_maps,
+    disparity: str = "centroid",           # "centroid" | "shift" | "mean"
     dx_agree_px: float = 50.0          # mismatch threshold when using "mean"
 ):
     """
@@ -830,11 +830,11 @@ def calculate_rectified_distance_and_area(
 
     # Pick rectification maps
     if lenses == "12":
-        lmxr, lmyr = left_map_x_rectify_12, left_map_y_rectify_12
-        rmxr, rmyr = right_map_x_rectify_12, right_map_y_rectify_12
+        lmxr, lmyr = rect_maps["left_map_x_rectify_12"], rect_maps["left_map_y_rectify_12"]
+        rmxr, rmyr = rect_maps["right_map_x_rectify_12"], rect_maps["right_map_y_rectify_12"]
     elif lenses == "03":
-        lmxr, lmyr = left_map_x_rectify_03, left_map_y_rectify_03
-        rmxr, rmyr = right_map_x_rectify_03, right_map_y_rectify_03
+        lmxr, lmyr = rect_maps["left_map_x_rectify_03"], rect_maps["left_map_y_rectify_03"]
+        rmxr, rmyr = rect_maps["right_map_x_rectify_03"], rect_maps["right_map_y_rectify_03"]
     else:
         raise ValueError("Lenses must be '12' or '03'")
 
@@ -888,7 +888,6 @@ def calculate_rectified_distance_and_area(
 
     return distance_m, area_cm2, (dx_centroid, dx_est), (int(left_rect.sum()), int(right_rect.sum()))
 
-
 def stereo_measure_from_boxes(
     predictor,
     boxes_folder: str,
@@ -897,12 +896,14 @@ def stereo_measure_from_boxes(
     masks_folder: str,
     focal_length_12: float,
     focal_length_03: float,
+    rect_maps, # rectification dictionary
     baseline_12: float = 0.06,
     baseline_03: float = 0.18,
     stride_logit_min: int = 5,
     stride_logit_max: int = 80,
     stride_logit_n: int = 20,
     logit_grid_div: int = 250,
+    save_folder: str = "./twin_fish",
     # Flags passed to calculate_rectified_distance_and_area
     rectify: bool = True,
     disparity: str = "mean",         # "centroid" | "shift" | "mean"
@@ -980,8 +981,16 @@ def stereo_measure_from_boxes(
             source_mask = np.load(str(mask_path)).astype(np.float32).squeeze()
 
             best_mask, best_box, best_score = detect_similar_mask(
-                box, predictor, direction, source_mask, source_logits, stride_logits, stride_boxes
+                box,
+                predictor,
+                direction,
+                source_logits,
+                stride_logits,
+                stride_boxes,
+                source_mask,
+                sim_tol=0.1
             )
+
             if best_mask is None:
                 if verbose:
                     print(f"Twin fish not detected in {target_img_name} (box {i})")
@@ -990,17 +999,9 @@ def stereo_measure_from_boxes(
             try:
                 distance, area, dx_pair, area_pair = calculate_rectified_distance_and_area(
                     source_mask, best_mask, baseline, focal_length, lenses,
-                    rectify=rectify, disparity=disparity, dx_agree_px=dx_agree_px
+                    rectify=rectify ,rectify_map = rect_maps , disparity=disparity, dx_agree_px=dx_agree_px
                 )
 
-                mismatch = False
-                if mismatch_px_threshold is not None and dx_pair[0] is not None and dx_pair[1] is not None:
-                    if abs(abs(float(dx_pair[0])) - abs(float(dx_pair[1]))) > float(mismatch_px_threshold):
-                        mismatch = True
-                        if verbose:
-                            print(f"disparity_mismatch for {source_img_name}_{i}: {dx_pair}")
-                if skip_on_mismatch and mismatch:
-                    continue
 
                 distances.append(distance)
                 areas.append(area)
@@ -1024,12 +1025,25 @@ def stereo_measure_from_boxes(
                     "area_px_left": None if area_pair[0] is None else int(area_pair[0]),
                     "area_px_right": None if area_pair[1] is None else int(area_pair[1]),
                     "best_score": None if best_score is None else float(best_score),
-                    "disparity_mismatch": mismatch,
                     "rectify": bool(rectify),
                     "disparity_mode": disparity,
                 })
-                if verbose:
-                    print("yes")
+                # save image of both masks 
+                saved_file = plot_masks(
+                    source_image=source_img,
+                    target_image=target_image,
+                    source_mask=source_mask,
+                    source_box=box,
+                    best_mask=best_mask,
+                    best_box=best_box,
+                    best_score=best_score,
+                    distance=distance if distance is not None else 0.0,
+                    area=area if area is not None else 0.0,
+                    index=i,
+                    show=False,
+                    save_dir=save_folder,
+                    filename=f"{source_img_name}_{i}"
+                )
 
             except Exception as e:
                 if verbose:
@@ -1037,6 +1051,8 @@ def stereo_measure_from_boxes(
 
     df = pd.DataFrame(rows)
     return df, distances, areas, lens_counter, dx_pairs, area_pairs
+
+
 def remove_outliers(df, cols, method="iqr", factor=1.5, z_thresh=3.0, pct=0.01):
     """
     method:
