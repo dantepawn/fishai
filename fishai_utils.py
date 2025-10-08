@@ -784,7 +784,7 @@ def calculate_rectified_distance_and_area(
     focal_length,
     lenses,
     rectify: bool = True,  # True: use stereo rectification maps; False: skip remap
-    rectify_map = rect_maps,
+    rect_maps, # rectification dictionary
     disparity: str = "centroid",           # "centroid" | "shift" | "mean"
     dx_agree_px: float = 50.0          # mismatch threshold when using "mean"
 ):
@@ -802,6 +802,7 @@ def calculate_rectified_distance_and_area(
         - "shift":    dx from estimate_mask_shift (ECC/phasecorr) after (optional) rectification
         - "mean":     mean of available dx estimates (flags mismatch if they differ > dx_agree_px)
       dx_agree_px: mismatch threshold for "mean"
+      rect_maps: rectification dictionary for each couple of lenses
 
     Returns:
       distance_m, area_cm2, (dx_centroid, dx_est), (area_px_left, area_px_right)
