@@ -783,8 +783,8 @@ def calculate_rectified_distance_and_area(
     baseline,
     focal_length,
     lenses,
-    rectify: bool = True,  # True: use stereo rectification maps; False: skip remap
     rect_maps, # rectification dictionary
+    rectify: bool = True,  # True: use stereo rectification maps; False: skip remap
     disparity: str = "centroid",           # "centroid" | "shift" | "mean"
     dx_agree_px: float = 50.0          # mismatch threshold when using "mean"
 ):
