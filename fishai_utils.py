@@ -1000,7 +1000,7 @@ def stereo_measure_from_boxes(
             try:
                 distance, area, dx_pair, area_pair = calculate_rectified_distance_and_area(
                     source_mask, best_mask, baseline, focal_length, lenses,
-                    rectify=rectify ,rectify_map = rect_maps , disparity=disparity, dx_agree_px=dx_agree_px
+                    rectify=rectify ,rect_maps = rect_maps , disparity=disparity, dx_agree_px=dx_agree_px
                 )
 
 
