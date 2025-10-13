@@ -602,7 +602,10 @@ def are_masks_same_translation_invariant(mask1: np.ndarray,
                                          mask2: np.ndarray,
                                          method: str = "match",
                                          tol: float = 1e-4) -> tuple[bool, float]:
-    d = mask_shape_distance_translation_invariant(mask1, mask2, method=method)
+    try :
+        d = mask_shape_distance_translation_invariant(mask1, mask2, method=method)
+    except :
+        return False , 100                                         
     return (d <= tol), d
 def _mask_similarity_score(candidate_mask: np.ndarray,
                            reference_mask: np.ndarray,
