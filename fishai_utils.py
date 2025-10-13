@@ -42,6 +42,50 @@ from sam2.build_sam import build_sam2
 from sam2.sam2_image_predictor import SAM2ImagePredictor
 from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 
+def split_and_rotate_images(
+    input_folder: str,
+    output_folder: str,
+    rotate: str = None  # None, "left", or "right"
+):
+    """
+    Splits each image in input_folder into four quadrants and saves them to output_folder.
+    Optionally rotates each image 90° left or right before splitting.
+
+    Args:
+        input_folder (str): Path to folder with input images.
+        output_folder (str): Path to folder to save split images.
+        rotate (str): "left" for 90° CCW, "right" for 90° CW, or None for no rotation.
+    """
+    os.makedirs(output_folder, exist_ok=True)
+    image_files = list(Path(input_folder).glob("*.*"))
+
+    for img_path in image_files:
+        img = cv2.imread(str(img_path))
+        if img is None:
+            print(f"Warning: Could not read {img_path}")
+            continue
+
+        # Optional rotation
+        if rotate == "left":
+            img = cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        elif rotate == "right":
+            img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+
+        height, width = img.shape[:2]
+        h_half, w_half = height // 2, width // 2
+
+        # Split into quadrants
+        l0 = img[:h_half, :w_half]
+        l1 = img[h_half:, :w_half]
+        l2 = img[h_half:, w_half:]
+        l3 = img[:h_half, w_half:]
+
+        # Save quadrants
+        stem = Path(img_path).stem
+        cv2.imwrite(f"{output_folder}/{stem}_l0.jpg", l0)
+        cv2.imwrite(f"{output_folder}/{stem}_l1.jpg", l1)
+        cv2.imwrite(f"{output_folder}/{stem}_l2.jpg", l2)
+        cv2.imwrite(f"{output_folder}/{stem}_l3.jpg", l3)
 
 
 def remove_fins_morphological(mask, kernel_size=5, iterations=3):
@@ -1206,7 +1250,7 @@ def visualize_mask_shift(original_mask, shifted_mask):
     plt.show()
 
     return dy, dx, score, method
-def generate_labels(results, target_folder, labels_folder, confidence: float = 0.2, line_width: int = 8, kpt_radius: int = 10) -> None:
+def generate_keypoints(results, target_folder, labels_folder, confidence: float = 0.2, line_width: int = 8, kpt_radius: int = 10) -> None:
     """
     Generate YOLO-style label files with bounding boxes and keypoints from detection results.
 
