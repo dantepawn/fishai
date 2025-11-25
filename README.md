@@ -1,4 +1,4 @@
-# fishai
+# Fishai
 
 **fishai** is a Python-based project aimed at providing tools for stereo camera calibration and related computer vision utilities. This repository contains scripts and configuration files for training object detection models (YOLO), stereo camera calibration, and various supporting utilities.
 
