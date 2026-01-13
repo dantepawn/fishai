@@ -90,7 +90,10 @@ This allows for automated biomass estimation at the individual fish level.
 
 Here are the images stored in the `./images/` folder:
 
+![Fishai_pipeline](./images/depth_result.png)
+
 ![Depth_anything_V3](./images/5850331252496468928.jpg)
+
 
 
 
