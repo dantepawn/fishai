@@ -1,0 +1,25 @@
+name: fish-sam2
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - pytorch=2.4.*
+  - torchvision
+  - torchaudio
+  - cudatoolkit=12.1
+  - git
+  - wget
+  - pip:
+      - supervision>=0.21.0
+      - ultralytics>=8.2.0
+      - opencv-python-headless
+      - pillow
+      - pandas
+      - matplotlib
+      - seaborn
+      - scikit-learn
+      - tqdm

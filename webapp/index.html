@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeepSnap Visionizer</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/feather-icons"></script>
+    <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.net.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/animejs@3.2.1/lib/anime.min.js"></script>
+    <style>
+        .upload-container {
+            backdrop-filter: blur(10px);
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        .result-container {
+            transition: all 0.5s ease;
+        }
+        .dropzone {
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+        }
+        .dropzone.active {
+            border-color: #6366f1;
+            background-color: rgba(99, 102, 241, 0.1);
+        }
+        .progress-bar {
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <div id="vanta-bg" class="fixed inset-0 -z-10"></div>
+    
+    <div class="container mx-auto px-4 py-12">
+        <header class="text-center mb-12">
+            <h1 class="text-4xl md:text-5xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-600">DeepSnap Visionizer</h1>
+            <p class="text-xl text-gray-300 max-w-2xl mx-auto">Upload your image and let our AI work its magic ✨</p>
+        </header>
+
+        <main class="max-w-4xl mx-auto">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Upload Section -->
+                <div class="upload-container rounded-xl p-6 shadow-2xl">
+                    <div class="flex flex-col items-center">
+                        <div id="dropzone" class="dropzone w-full h-64 rounded-lg flex flex-col items-center justify-center cursor-pointer mb-6">
+                            <i data-feather="upload-cloud" class="w-16 h-16 text-gray-400 mb-4"></i>
+                            <p class="text-lg text-gray-300 mb-2">Drag & drop your image here</p>
+                            <span class="text-sm text-gray-500">or click to browse</span>
+                            <input type="file" id="fileInput" class="hidden" accept="image/*">
+                        </div>
+                        
+                        <div class="w-full mb-6">
+                            <div class="flex justify-between text-sm text-gray-400 mb-1">
+                                <span>Selected file</span>
+                                <span id="fileSize">0 MB</span>
+                            </div>
+                            <div class="w-full bg-gray-700 rounded-full h-2.5">
+                                <div id="progressBar" class="progress-bar bg-gradient-to-r from-purple-500 to-pink-600 h-2.5 rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        
+                        <button id="processBtn" class="w-full py-3 px-6 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg font-medium hover:from-purple-700 hover:to-pink-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                            <span id="btnText">Process Image</span>
+                            <i data-feather="loader" class="hidden animate-spin ml-2"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Result Section -->
+                <div class="result-container rounded-xl p-6 shadow-2xl">
+                    <h2 class="text-2xl font-semibold mb-6 text-center">AI Output</h2>
+                    <div id="resultPlaceholder" class="flex flex-col items-center justify-center h-64 bg-gray-800 rounded-lg">
+                        <i data-feather="image" class="w-16 h-16 text-gray-500 mb-4"></i>
+                        <p class="text-gray-400">Your processed image will appear here</p>
+                    </div>
+                    <div id="resultDisplay" class="hidden">
+                        <div class="relative mb-4">
+                            <img id="processedImage" src="" alt="Processed result" class="w-full rounded-lg border border-gray-700">
+                            <div class="absolute top-2 right-2 flex space-x-2">
+                                <button id="downloadBtn" class="p-2 bg-gray-800 rounded-full hover:bg-gray-700 transition">
+                                    <i data-feather="download" class="w-4 h-4"></i>
+                                </button>
+                                <button id="shareBtn" class="p-2 bg-gray-800 rounded-full hover:bg-gray-700 transition">
+                                    <i data-feather="share-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="flex justify-between">
+                            <button id="tryAnotherBtn" class="py-2 px-4 bg-gray-700 rounded-lg hover:bg-gray-600 transition">
+                                Try Another
+                            </button>
+                            <button id="saveResultBtn" class="py-2 px-4 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg hover:from-purple-700 hover:to-pink-700 transition">
+                                Save Result
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="mt-16 text-center text-gray-400 text-sm">
+            <p>Powered by cutting-edge deep learning technology</p>
+        </footer>
+    </div>
+
+    <script>
+        // Initialize Vanta.js background
+        VANTA.NET({
+            el: "#vanta-bg",
+            mouseControls: true,
+            touchControls: true,
+            gyroControls: false,
+            minHeight: 200.00,
+            minWidth: 200.00,
+            scale: 1.00,
+            scaleMobile: 1.00,
+            color: 0x7e22ce,
+            backgroundColor: 0x111827,
+            points: 10.00,
+            maxDistance: 24.00,
+            spacing: 19.00
+        });
+
+        // Initialize feather icons
+        feather.replace();
+
+        // DOM elements
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+        const processBtn = document.getElementById('processBtn');
+        const btnText = document.getElementById('btnText');
+        const progressBar = document.getElementById('progressBar');
+        const fileSize = document.getElementById('fileSize');
+        const resultPlaceholder = document.getElementById('resultPlaceholder');
+        const resultDisplay = document.getElementById('resultDisplay');
+        const processedImage = document.getElementById('processedImage');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const shareBtn = document.getElementById('shareBtn');
+        const tryAnotherBtn = document.getElementById('tryAnotherBtn');
+        const saveResultBtn = document.getElementById('saveResultBtn');
+
+        // Variables
+        let selectedFile = null;
+
+        // Event listeners
+        dropzone.addEventListener('click', () => fileInput.click());
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('active');
+        });
+        dropzone.addEventListener('dragleave', () => dropzone.classList.remove('active'));
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('active');
+            handleFile(e.dataTransfer.files[0]);
+        });
+        fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+        processBtn.addEventListener('click', processImage);
+        tryAnotherBtn.addEventListener('click', resetUpload);
+        downloadBtn.addEventListener('click', downloadImage);
+        shareBtn.addEventListener('click', shareImage);
+
+        // Functions
+        function handleFile(file) {
+            if (!file.type.match('image.*')) {
+                alert('Please select an image file (JPEG, PNG, etc.)');
+                return;
+            }
+
+            selectedFile = file;
+            fileSize.textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB`;
+            progressBar.style.width = '100%';
+            processBtn.disabled = false;
+
+            // Show preview (optional)
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                // You could show a preview here if you want
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function processImage() {
+            if (!selectedFile) return;
+
+            // Show loading state
+            processBtn.disabled = true;
+            btnText.textContent = 'Processing...';
+            feather.replace();
+            document.querySelector('#processBtn i').classList.remove('hidden');
+
+            // Simulate processing delay (replace with actual API call)
+            setTimeout(() => {
+                // Hide loading state
+                btnText.textContent = 'Process Image';
+                document.querySelector('#processBtn i').classList.add('hidden');
+                processBtn.disabled = false;
+                
+                // Show result (in a real app, this would be the response from your API)
+                resultPlaceholder.classList.add('hidden');
+                resultDisplay.classList.remove('hidden');
+                
+                // For demo purposes, we'll just show a placeholder
+                processedImage.src = "http://static.photos/technology/640x360/42";
+            }, 3000);
+        }
+
+        function resetUpload() {
+            selectedFile = null;
+            fileInput.value = '';
+            fileSize.textContent = '0 MB';
+            progressBar.style.width = '0%';
+            processBtn.disabled = true;
+            resultPlaceholder.classList.remove('hidden');
+            resultDisplay.classList.add('hidden');
+        }
+
+        function downloadImage() {
+            if (!processedImage.src) return;
+            
+            const a = document.createElement('a');
+            a.href = processedImage.src;
+            a.download = 'processed-image.png';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        function shareImage() {
+            if (!processedImage.src) return;
+            
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Check out my processed image',
+                    text: 'I used DeepSnap Visionizer to process this image',
+                    url: window.location.href
+                }).catch(err => {
+                    console.log('Error sharing:', err);
+                    alert('Sharing failed. Please try another method.');
+                });
+            } else {
+                alert('Web Share API not supported in your browser. Try downloading and sharing manually.');
+            }
+        }
+
+        // Animation for the upload container
+        anime({
+            targets: '.upload-container',
+            translateY: [-30, 0],
+            opacity: [0, 1],
+            duration: 800,
+            easing: 'easeOutExpo'
+        });
+
+        // Animation for the result container
+        anime({
+            targets: '.result-container',
+            translateY: [30, 0],
+            opacity: [0, 1],
+            duration: 800,
+            delay: 200,
+            easing: 'easeOutExpo'
+        });
+    </script>
+</body>
+</html>

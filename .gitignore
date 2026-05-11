@@ -1,0 +1,62 @@
+# Local environments
+.conda/
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Notebook/editor noise
+.ipynb_checkpoints/
+.vscode/
+.idea/
+
+# Data and generated artifacts
+**/data/**
+!**/data/**/
+!**/data/**/.gitkeep
+!**/data/**/README.md
+outputs/
+**/outputs/
+**/inference_outputs/
+experiments/
+runs/
+wandb/
+mlruns/
+
+# Models and large binary artifacts
+*.pt
+*.pth
+*.onnx
+*.engine
+*.ckpt
+*.safetensors
+*.npy
+*.npz
+*.pkl
+*.joblib
+*.db
+*.sqlite
+*.sqlite3
+*.zip
+*.tar
+*.tar.gz
+*.7z
+
+# Local external/vendor checkouts kept outside Git for now
+depth_estimation/external/vggt/
+depth_estimation/external/modelzoo/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Keep folder placeholders trackable after broad ignore rules.
+!**/.gitkeep
+!**/data/outputs/
+!**/data/outputs/.gitkeep
+!**/data/inference_outputs/
+!**/data/inference_outputs/.gitkeep
